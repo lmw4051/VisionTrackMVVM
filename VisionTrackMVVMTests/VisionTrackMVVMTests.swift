@@ -10,8 +10,13 @@ import Testing
 
 struct VisionTrackMVVMTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    @MainActor
+    @Test func dashboardStartsWithoutRecordsOrPendingSync() {
+        let viewModel = DashboardViewModel()
+
+        #expect(viewModel.latestRecord == nil)
+        #expect(viewModel.syncStatus == .noPendingData)
+        #expect(!viewModel.canAddRecord)
     }
 
 }

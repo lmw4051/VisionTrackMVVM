@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct ContentView: View {
+    let repository: any VisionRecordRepository
+
     var body: some View {
         NavigationStack {
-            DashboardView()
+            DashboardView(repository: repository)
         }
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(repository: InMemoryVisionRecordRepository())
 }

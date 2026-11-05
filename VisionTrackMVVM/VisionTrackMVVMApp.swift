@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct VisionTrackMVVMApp: App {
+    @State private var repository = InMemoryVisionRecordRepository()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(repository: repository)
         }
     }
 }

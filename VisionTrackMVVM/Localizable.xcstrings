@@ -49,6 +49,22 @@
         }
       }
     },
+    "Examination Date and Time": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Examination Date and Time"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢測日期與時間"
+          }
+        }
+      }
+    },
     "Left Eye": {
       "localizations": {
         "en": {

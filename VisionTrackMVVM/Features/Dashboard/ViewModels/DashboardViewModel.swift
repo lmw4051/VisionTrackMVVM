@@ -1,17 +1,23 @@
-import Foundation
 import Observation
 
 @MainActor
 @Observable
 final class DashboardViewModel {
     enum SyncStatus: Equatable {
-        case noPendingData
+        case unavailable
     }
 
-    private(set) var latestRecord: VisionRecord? = nil
+    private(set) var latestRecord: VisionRecord?
+    private let repository: any VisionRecordRepository
+    let syncStatus: SyncStatus = .unavailable
+    let canAddRecord = true
 
-    // Syncing and new features are not yet available.
-    // There is currently no data waiting to be synced.
-    private(set) var syncStatus: SyncStatus = .noPendingData
-    let canAddRecord = false
+    init(repository: any VisionRecordRepository) {
+        self.repository = repository
+        refresh()
+    }
+
+    func refresh() {
+        latestRecord = repository.latestRecord()
+    }
 }

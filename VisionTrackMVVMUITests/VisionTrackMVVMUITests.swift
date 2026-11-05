@@ -25,7 +25,7 @@ final class VisionTrackMVVMUITests: XCTestCase {
     @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
-        let app = XCUIApplication()
+        let app = makeUITestApplication()
         app.launch()
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
@@ -34,9 +34,11 @@ final class VisionTrackMVVMUITests: XCTestCase {
     @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
+        let app = makeUITestApplication()
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            app.launch()
         }
+        XCTAssertTrue(app.buttons["dashboard.addVisionRecordButton"].waitForExistence(timeout: 8))
     }
 }
 
@@ -139,8 +141,42 @@ final class VisionRecordEntryUITests: XCTestCase {
         XCTAssertFalse(saveButton(in: app).isEnabled)
     }
 
-    private func launch(language: Language = .english) -> XCUIApplication {
-        let app = XCUIApplication()
+    func testRecordSurvivesProcessRelaunchAndOtherStoreStaysEmpty() {
+        let app = launch()
+        assertEmptyDashboard(in: app)
+        openEntry(in: app)
+        enterValidRecord(in: app)
+        saveButton(in: app).tap()
+        assertEntryDismissed(in: app)
+        assertDashboardValue("0.8", for: "Left Eye", in: app)
+        assertDashboardValue("1", for: "Right Eye", in: app)
+
+        app.terminate()
+        XCTAssertEqual(app.state, .notRunning)
+        app.launch()
+        assertDashboardValue("0.8", for: "Left Eye", in: app)
+        assertDashboardValue("1", for: "Right Eye", in: app)
+
+        app.terminate()
+        let otherStoreApp = launch()
+        assertEmptyDashboard(in: otherStoreApp)
+    }
+
+    func testInvalidStoreIDShowsLocalizedErrorAndDoesNotOpenDashboard() {
+        let app = launch(language: .traditionalChinese, storeID: "../invalid")
+        let retry = app.buttons["visionRecordStore.retryButton"]
+        XCTAssertTrue(retry.waitForExistence(timeout: timeout))
+        XCTAssertTrue(app.staticTexts["無法開啟檢測紀錄儲存空間"].exists)
+        XCTAssertEqual(retry.label, "重試")
+        XCTAssertFalse(addButton(in: app).exists)
+
+        retry.tap()
+        XCTAssertTrue(retry.waitForExistence(timeout: timeout))
+        XCTAssertFalse(addButton(in: app).exists)
+    }
+
+    private func launch(language: Language = .english, storeID: String = UUID().uuidString) -> XCUIApplication {
+        let app = makeUITestApplication(storeID: storeID)
         app.launchArguments = language.launchArguments
         app.launch()
         return app

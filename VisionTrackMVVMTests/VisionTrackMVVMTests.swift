@@ -6,11 +6,71 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import VisionTrackMVVM
 
 @MainActor
 struct VisionTrackMVVMTests {
+
+    #if DEBUG
+    @Test func appHostUsesInMemoryContainer() throws {
+        let environment = ProcessInfo.processInfo.environment
+        #expect(try VisionRecordStartup.destination(environment: environment) == .hostedUnitTests)
+
+        let startup = VisionRecordStartup()
+        startup.startIfNeeded()
+        guard case .ready(let container, _) = startup.state else {
+            Issue.record("Expected the App host to open an isolated container")
+            return
+        }
+        #expect(!container.configurations.isEmpty)
+        let usesOnlyMemory = container.configurations.allSatisfy(\.isStoredInMemoryOnly)
+        #expect(usesOnlyMemory)
+    }
+    #endif
+
+    @Test func startupRetryOpensARealContainerAndReusesItAfterSuccess() throws {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VisionRecordStartupTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
+        defer {
+            do {
+                try FileManager.default.removeItem(at: parent)
+            } catch {
+                Issue.record("Could not remove the test-owned startup directory: \(error)")
+            }
+        }
+        let storeDirectory = parent.appendingPathComponent("store")
+        try Data().write(to: storeDirectory)
+        var attempts = 0
+
+        do {
+            let startup = VisionRecordStartup {
+                attempts += 1
+                return try VisionRecordStore.onDisk(at: storeDirectory.appendingPathComponent("VisionRecords.store"))
+            }
+            startup.startIfNeeded()
+            guard case .failed = startup.state else {
+                Issue.record("Expected opening a store beneath a file to fail")
+                return
+            }
+            startup.startIfNeeded()
+            #expect(attempts == 1)
+
+            try FileManager.default.removeItem(at: storeDirectory)
+            try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: false)
+            startup.retry()
+            guard case .ready(_, let repository) = startup.state else {
+                Issue.record("Expected retry to open the store")
+                return
+            }
+            #expect(try repository.latestRecord() == nil)
+            startup.startIfNeeded()
+            startup.retry()
+            #expect(attempts == 2)
+        }
+    }
 
     @Test func dashboardStartsWithoutRecordsAndCanAddRecord() {
         let viewModel = DashboardViewModel(repository: InMemoryVisionRecordRepository())

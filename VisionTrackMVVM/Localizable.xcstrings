@@ -448,6 +448,22 @@
           }
         }
       }
+    },
+    "Unable to Open Record Storage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to Open Record Storage"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法開啟檢測紀錄儲存空間"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

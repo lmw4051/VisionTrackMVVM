@@ -9,11 +9,30 @@ import SwiftUI
 
 @main
 struct VisionTrackMVVMApp: App {
-    @State private var repository = InMemoryVisionRecordRepository()
+    @State private var startup = VisionRecordStartup()
 
     var body: some Scene {
         WindowGroup {
-            ContentView(repository: repository)
+            Group {
+                switch startup.state {
+                case .idle:
+                    ProgressView()
+                case .ready(_, let repository):
+                    ContentView(repository: repository)
+                case .failed:
+                    ContentUnavailableView {
+                        Label("Unable to Open Record Storage", systemImage: "externaldrive.badge.exclamationmark")
+                    } description: {
+                        Text("Please try again.")
+                    } actions: {
+                        Button("Retry", action: startup.retry)
+                            .accessibilityIdentifier("visionRecordStore.retryButton")
+                    }
+                }
+            }
+            .task {
+                startup.startIfNeeded()
+            }
         }
     }
 }

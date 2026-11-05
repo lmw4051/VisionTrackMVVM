@@ -6,6 +6,7 @@ import Testing
 struct VisionAcuityInputValidatorTests {
     private let english = Locale(identifier: "en_US")
     private let french = Locale(identifier: "fr_FR")
+    private let traditionalChineseTW = Locale(identifier: "zh_TW")
 
     @Test(arguments: ["", " \t\n"])
     func requiresInput(_ input: String) {
@@ -47,5 +48,24 @@ struct VisionAcuityInputValidatorTests {
         #expect(VisionAcuityInputValidator.validate("1,000", locale: french) == .failure(.tooManyFractionDigits))
         #expect(VisionAcuityInputValidator.validate("1,2.3", locale: french) == .failure(.invalidFormat))
         #expect(VisionAcuityInputValidator.validate("1\u{202F}000", locale: french) == .failure(.invalidFormat))
+    }
+
+    @Test(arguments: [("1.25", 1.25), ("0.01", 0.01), ("2.00", 2.0)])
+    func acceptsValidValuesInTraditionalChineseTW(_ example: (input: String, expected: Double)) {
+        let result = VisionAcuityInputValidator.validate(example.input, locale: traditionalChineseTW)
+        #expect(result == .success(example.expected))
+    }
+
+    @Test(arguments: [
+        ("1,25", VisionAcuityInputValidator.ValidationError.invalidFormat),
+        ("0", .outOfRange),
+        ("2.01", .outOfRange),
+        ("1.234", .tooManyFractionDigits)
+    ])
+    func rejectsInvalidValuesInTraditionalChineseTW(
+        _ example: (input: String, expected: VisionAcuityInputValidator.ValidationError)
+    ) {
+        let result = VisionAcuityInputValidator.validate(example.input, locale: traditionalChineseTW)
+        #expect(result == .failure(example.expected))
     }
 }

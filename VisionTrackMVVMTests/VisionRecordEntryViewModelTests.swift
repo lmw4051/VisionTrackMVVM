@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import VisionTrackMVVM
 
@@ -92,10 +93,80 @@ struct VisionRecordEntryViewModelTests {
         #expect(repository.records.count == 1)
     }
 
-    private func makeViewModel(repository: RepositoryStub) -> VisionRecordEntryViewModel {
+    @Test func updatingLocaleRevalidatesBothEyesWithoutChangingInputs() {
+        let repository = RepositoryStub()
+        let english = Locale(identifier: "en_US")
+        let viewModel = makeViewModel(repository: repository, locale: english)
+        viewModel.leftEyeInput = "1,25"
+        viewModel.rightEyeInput = "0,8"
+
+        #expect(viewModel.leftEyeValidation == .failure(.invalidFormat))
+        #expect(viewModel.rightEyeValidation == .failure(.invalidFormat))
+        #expect(!viewModel.canSave)
+
+        viewModel.updateLocale(Locale(identifier: "fr_FR"))
+
+        #expect(viewModel.leftEyeValidation == .success(1.25))
+        #expect(viewModel.rightEyeValidation == .success(0.8))
+        #expect(viewModel.canSave)
+        #expect(viewModel.leftEyeInput == "1,25")
+        #expect(viewModel.rightEyeInput == "0,8")
+
+        viewModel.updateLocale(english)
+
+        #expect(viewModel.leftEyeValidation == .failure(.invalidFormat))
+        #expect(viewModel.rightEyeValidation == .failure(.invalidFormat))
+        #expect(!viewModel.canSave)
+        #expect(viewModel.leftEyeInput == "1,25")
+        #expect(viewModel.rightEyeInput == "0,8")
+        #expect(repository.addAttempts == 0)
+    }
+
+    @Test func savingUsesUpdatedLocale() throws {
+        let repository = RepositoryStub()
+        let viewModel = makeViewModel(repository: repository, locale: Locale(identifier: "en_US"))
+        viewModel.leftEyeInput = "1,25"
+        viewModel.rightEyeInput = "0,8"
+
+        #expect(viewModel.save() == .invalidInput)
+        #expect(repository.addAttempts == 0)
+
+        viewModel.updateLocale(Locale(identifier: "fr_FR"))
+        #expect(repository.addAttempts == 0)
+        #expect(viewModel.save() == .saved)
+        #expect(repository.addAttempts == 1)
+        let record = try #require(repository.records.first)
+        #expect(record.id == recordID)
+        #expect(record.measuredAt == timestamp)
+        #expect(record.leftEyeAcuity == 1.25)
+        #expect(record.rightEyeAcuity == 0.8)
+    }
+
+    @Test func observationTracksLocaleThroughCanSave() async {
+        let viewModel = makeViewModel(repository: RepositoryStub(), locale: Locale(identifier: "en_US"))
+        viewModel.leftEyeInput = "1,25"
+        viewModel.rightEyeInput = "0.8"
+
+        await confirmation { changed in
+            let initiallyCanSave = withObservationTracking {
+                viewModel.canSave
+            } onChange: {
+                changed()
+            }
+            #expect(!initiallyCanSave)
+
+            viewModel.updateLocale(Locale(identifier: "fr_FR"))
+            #expect(viewModel.canSave)
+        }
+    }
+
+    private func makeViewModel(
+        repository: RepositoryStub,
+        locale: Locale = Locale(identifier: "fr_FR")
+    ) -> VisionRecordEntryViewModel {
         VisionRecordEntryViewModel(
             repository: repository,
-            locale: Locale(identifier: "fr_FR"),
+            locale: locale,
             makeID: { recordID },
             now: { timestamp }
         )

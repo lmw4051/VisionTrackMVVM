@@ -23,7 +23,7 @@ final class VisionRecordEntryViewModel {
     private(set) var submissionState: SubmissionState = .editing
 
     private let repository: any VisionRecordRepository
-    private let locale: Locale
+    private var locale: Locale
     private let makeID: () -> UUID
     private let now: () -> Date
 
@@ -37,6 +37,10 @@ final class VisionRecordEntryViewModel {
         self.locale = locale
         self.makeID = makeID
         self.now = now
+    }
+
+    func updateLocale(_ newLocale: Locale) {
+        locale = newLocale
     }
 
     var leftEyeValidation: Result<Double, VisionAcuityInputValidator.ValidationError> {

@@ -69,17 +69,123 @@ struct VisionRecordEntryViewModelTests {
         #expect(repository.records.isEmpty)
     }
 
-    @Test func retryAfterFailureAddsExactlyOneRecord() {
+    @Test func repeatedRetriesReuseOneSnapshotAndAddExactlyOneRecord() throws {
         let repository = RepositoryStub()
         repository.shouldFail = true
-        let viewModel = makeValidViewModel(repository: repository)
+        let generators = SnapshotGenerators()
+        let viewModel = makeRetryViewModel(repository: repository, generators: generators)
 
+        #expect(viewModel.save() == .repositoryFailure)
+        #expect(viewModel.save() == .repositoryFailure)
         #expect(viewModel.save() == .repositoryFailure)
         repository.shouldFail = false
         #expect(viewModel.save() == .saved)
 
-        #expect(repository.addAttempts == 2)
+        #expect(repository.addAttempts == 4)
         #expect(repository.records.count == 1)
+        #expect(generators.idCalls == 1)
+        #expect(generators.clockCalls == 1)
+        let first = try #require(repository.attemptedRecords.first)
+        for attempt in repository.attemptedRecords.dropFirst() {
+            expectSameRecord(attempt, as: first)
+        }
+    }
+
+    @Test(arguments: [true, false])
+    func changingEitherValidEyeValueCreatesANewSnapshot(changeLeftEye: Bool) throws {
+        let repository = RepositoryStub()
+        repository.shouldFail = true
+        let generators = SnapshotGenerators()
+        let viewModel = makeRetryViewModel(repository: repository, generators: generators)
+        #expect(viewModel.save() == .repositoryFailure)
+
+        if changeLeftEye {
+            viewModel.leftEyeInput = "0.9"
+        } else {
+            viewModel.rightEyeInput = "1.1"
+        }
+        repository.shouldFail = false
+        #expect(viewModel.save() == .saved)
+
+        let first = try #require(repository.attemptedRecords.first)
+        let saved = try #require(repository.records.first)
+        #expect(saved.id != first.id)
+        #expect(saved.measuredAt != first.measuredAt)
+        #expect(saved.leftEyeAcuity == (changeLeftEye ? 0.9 : 0.8))
+        #expect(saved.rightEyeAcuity == (changeLeftEye ? 1 : 1.1))
+        #expect(generators.idCalls == 2)
+        #expect(generators.clockCalls == 2)
+    }
+
+    @Test func equivalentTextAndLocaleChangesKeepTheSnapshot() throws {
+        let repository = RepositoryStub()
+        repository.shouldFail = true
+        let generators = SnapshotGenerators()
+        let viewModel = makeRetryViewModel(repository: repository, generators: generators)
+        #expect(viewModel.save() == .repositoryFailure)
+
+        viewModel.rightEyeInput = "1.00"
+        viewModel.updateLocale(Locale(identifier: "en_US"))
+        #expect(!viewModel.canSave)
+        #expect(viewModel.save() == .invalidInput)
+        #expect(repository.addAttempts == 1)
+        viewModel.leftEyeInput = "0.80"
+        #expect(viewModel.canSave)
+        viewModel.updateLocale(Locale(identifier: "zh_TW"))
+        #expect(viewModel.canSave)
+        repository.shouldFail = false
+        #expect(viewModel.save() == .saved)
+
+        let first = try #require(repository.attemptedRecords.first)
+        let saved = try #require(repository.records.first)
+        expectSameRecord(saved, as: first)
+        #expect(generators.idCalls == 1)
+        #expect(generators.clockCalls == 1)
+    }
+
+    @Test func invalidInputCannotSubmitTheSnapshotButCanBeCorrected() throws {
+        let repository = RepositoryStub()
+        repository.shouldFail = true
+        let generators = SnapshotGenerators()
+        let viewModel = makeRetryViewModel(repository: repository, generators: generators)
+        #expect(viewModel.save() == .repositoryFailure)
+
+        viewModel.rightEyeInput = "2.01"
+        #expect(!viewModel.canSave)
+        #expect(viewModel.save() == .invalidInput)
+        #expect(repository.addAttempts == 1)
+        #expect(viewModel.submissionState == .saveFailed)
+        viewModel.rightEyeInput = "1.0"
+        repository.shouldFail = false
+        #expect(viewModel.save() == .saved)
+
+        let first = try #require(repository.attemptedRecords.first)
+        let saved = try #require(repository.records.first)
+        expectSameRecord(saved, as: first)
+        #expect(generators.idCalls == 1)
+        #expect(generators.clockCalls == 1)
+    }
+
+    @Test func changingAValidValueAndRevertingStillCreatesANewSnapshot() throws {
+        let repository = RepositoryStub()
+        repository.shouldFail = true
+        let generators = SnapshotGenerators()
+        let viewModel = makeRetryViewModel(repository: repository, generators: generators)
+        #expect(viewModel.save() == .repositoryFailure)
+
+        viewModel.leftEyeInput = "0.9"
+        viewModel.leftEyeInput = "0,8"
+        repository.shouldFail = false
+        #expect(viewModel.save() == .saved)
+
+        let first = try #require(repository.attemptedRecords.first)
+        let saved = try #require(repository.records.first)
+        #expect(saved.id != first.id)
+        #expect(saved.measuredAt != first.measuredAt)
+        #expect(saved.leftEyeAcuity == first.leftEyeAcuity)
+        #expect(saved.rightEyeAcuity == first.rightEyeAcuity)
+        #expect(generators.idCalls == 2)
+        #expect(generators.clockCalls == 2)
     }
 
     @Test func successfulSubmissionCannotBeRepeated() {
@@ -179,6 +285,44 @@ struct VisionRecordEntryViewModelTests {
         return viewModel
     }
 
+    private func makeRetryViewModel(
+        repository: RepositoryStub,
+        generators: SnapshotGenerators
+    ) -> VisionRecordEntryViewModel {
+        let viewModel = VisionRecordEntryViewModel(
+            repository: repository,
+            locale: Locale(identifier: "fr_FR"),
+            makeID: generators.makeID,
+            now: generators.now
+        )
+        viewModel.leftEyeInput = "0,8"
+        viewModel.rightEyeInput = "1.0"
+        return viewModel
+    }
+
+    private func expectSameRecord(_ actual: VisionRecord, as expected: VisionRecord) {
+        #expect(actual.id == expected.id)
+        #expect(actual.measuredAt == expected.measuredAt)
+        #expect(actual.leftEyeAcuity == expected.leftEyeAcuity)
+        #expect(actual.rightEyeAcuity == expected.rightEyeAcuity)
+    }
+
+    @MainActor
+    private final class SnapshotGenerators {
+        private(set) var idCalls = 0
+        private(set) var clockCalls = 0
+
+        func makeID() -> UUID {
+            idCalls += 1
+            return UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8(idCalls)))
+        }
+
+        func now() -> Date {
+            clockCalls += 1
+            return Date(timeIntervalSince1970: TimeInterval(clockCalls))
+        }
+    }
+
     @MainActor
     private final class RepositoryStub: VisionRecordRepository {
         private enum StubError: Error {
@@ -186,7 +330,8 @@ struct VisionRecordEntryViewModelTests {
         }
 
         var shouldFail = false
-        private(set) var addAttempts = 0
+        private(set) var attemptedRecords: [VisionRecord] = []
+        var addAttempts: Int { attemptedRecords.count }
         private(set) var records: [VisionRecord] = []
 
         func latestRecord() -> VisionRecord? {
@@ -194,7 +339,7 @@ struct VisionRecordEntryViewModelTests {
         }
 
         func add(_ record: VisionRecord) throws {
-            addAttempts += 1
+            attemptedRecords.append(record)
             if shouldFail { throw StubError.writeFailed }
             records.append(record)
         }

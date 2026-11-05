@@ -18,14 +18,19 @@ final class VisionRecordEntryViewModel {
         case alreadySubmittingOrSaved
     }
 
-    var leftEyeInput = ""
-    var rightEyeInput = ""
+    var leftEyeInput = "" {
+        didSet { invalidateSnapshotIfValuesChanged() }
+    }
+    var rightEyeInput = "" {
+        didSet { invalidateSnapshotIfValuesChanged() }
+    }
     private(set) var submissionState: SubmissionState = .editing
 
     private let repository: any VisionRecordRepository
     private var locale: Locale
     private let makeID: () -> UUID
     private let now: () -> Date
+    @ObservationIgnored private var pendingRecord: VisionRecord?
 
     init(
         repository: any VisionRecordRepository,
@@ -41,6 +46,7 @@ final class VisionRecordEntryViewModel {
 
     func updateLocale(_ newLocale: Locale) {
         locale = newLocale
+        invalidateSnapshotIfValuesChanged()
     }
 
     var leftEyeValidation: Result<Double, VisionAcuityInputValidator.ValidationError> {
@@ -66,20 +72,33 @@ final class VisionRecordEntryViewModel {
         }
 
         submissionState = .saving
-        let record = VisionRecord(
+        let record = pendingRecord ?? VisionRecord(
             id: makeID(),
             measuredAt: now(),
             leftEyeAcuity: left,
             rightEyeAcuity: right
         )
+        pendingRecord = record
 
         do {
             try repository.add(record)
+            pendingRecord = nil
             submissionState = .saved
             return .saved
         } catch {
             submissionState = .saveFailed
             return .repositoryFailure
+        }
+    }
+
+    private func invalidateSnapshotIfValuesChanged() {
+        guard let pendingRecord else { return }
+
+        // Invalid or equivalent input keeps the snapshot available for a later valid retry.
+        if case let .success(left) = leftEyeValidation, left != pendingRecord.leftEyeAcuity {
+            self.pendingRecord = nil
+        } else if case let .success(right) = rightEyeValidation, right != pendingRecord.rightEyeAcuity {
+            self.pendingRecord = nil
         }
     }
 

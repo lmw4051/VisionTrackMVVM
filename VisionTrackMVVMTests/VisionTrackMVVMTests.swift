@@ -15,7 +15,10 @@ struct VisionTrackMVVMTests {
     @Test func dashboardStartsWithoutRecordsAndCanAddRecord() {
         let viewModel = DashboardViewModel(repository: InMemoryVisionRecordRepository())
 
-        #expect(viewModel.latestRecord == nil)
+        guard case .empty = viewModel.recordState else {
+            Issue.record("Expected an empty record state")
+            return
+        }
         #expect(viewModel.syncStatus == .unavailable)
         #expect(viewModel.canAddRecord)
     }
@@ -24,13 +27,21 @@ struct VisionTrackMVVMTests {
         let repository = InMemoryVisionRecordRepository()
         let newest = Date(timeIntervalSince1970: 2_000)
         let older = Date(timeIntervalSince1970: 1_000)
-        try repository.add(VisionRecord(id: UUID(), measuredAt: newest, leftEyeAcuity: 1.2, rightEyeAcuity: 1))
+        let latest = VisionRecord(id: UUID(), measuredAt: newest, leftEyeAcuity: 1.2, rightEyeAcuity: 1)
+        try repository.add(latest)
         try repository.add(VisionRecord(id: UUID(), measuredAt: older, leftEyeAcuity: 0.5, rightEyeAcuity: 0.6))
 
         let viewModel = DashboardViewModel(repository: repository)
 
-        #expect(viewModel.latestRecord?.measuredAt == newest)
-        #expect(viewModel.latestRecord?.leftEyeAcuity == 1.2)
+        guard case .loaded(let record) = viewModel.recordState else {
+            Issue.record("Expected a loaded record state")
+            return
+        }
+        #expect(record.id == latest.id)
+        #expect(record.measuredAt == newest)
+        #expect(record.leftEyeAcuity == 1.2)
+        #expect(record.rightEyeAcuity == 1)
+        #expect(viewModel.canAddRecord)
     }
 
     @Test func dashboardRefreshesAfterEntrySavesToSharedRepository() {
@@ -46,12 +57,87 @@ struct VisionTrackMVVMTests {
         entry.rightEyeInput = "0.8"
 
         #expect(entry.save() == .saved)
-        #expect(dashboard.latestRecord == nil)
+        guard case .empty = dashboard.recordState else {
+            Issue.record("Expected an empty state before refreshing")
+            return
+        }
 
         dashboard.refresh()
 
-        #expect(dashboard.latestRecord?.measuredAt == measuredAt)
-        #expect(dashboard.latestRecord?.leftEyeAcuity == 1.2)
-        #expect(dashboard.latestRecord?.rightEyeAcuity == 0.8)
+        guard case .loaded(let record) = dashboard.recordState else {
+            Issue.record("Expected a loaded state after refreshing")
+            return
+        }
+        #expect(record.measuredAt == measuredAt)
+        #expect(record.leftEyeAcuity == 1.2)
+        #expect(record.rightEyeAcuity == 0.8)
+    }
+
+    @Test func dashboardReadFailureDisablesAddingRecords() {
+        let repository = ReadRepositoryStub()
+        let viewModel = DashboardViewModel(repository: repository)
+
+        guard case .failed = viewModel.recordState else {
+            Issue.record("Expected a read failure, not an empty state")
+            return
+        }
+        #expect(!viewModel.canAddRecord)
+        #expect(repository.readAttempts == 1)
+        #expect(repository.addAttempts == 0)
+    }
+
+    @Test func dashboardRetryCanLoadARecordWithoutWriting() {
+        let repository = ReadRepositoryStub()
+        let viewModel = DashboardViewModel(repository: repository)
+        let record = VisionRecord(id: UUID(), measuredAt: Date(timeIntervalSince1970: 2_000),
+                                  leftEyeAcuity: 1.2, rightEyeAcuity: 0.8)
+        repository.readResult = .success(record)
+
+        viewModel.refresh()
+
+        guard case .loaded(let latest) = viewModel.recordState else {
+            Issue.record("Expected a loaded record after retry")
+            return
+        }
+        #expect(latest.id == record.id)
+        #expect(viewModel.canAddRecord)
+        #expect(repository.readAttempts == 2)
+        #expect(repository.addAttempts == 0)
+    }
+
+    @Test func dashboardRetryCanRecoverToEmptyWithoutWriting() {
+        let repository = ReadRepositoryStub()
+        let viewModel = DashboardViewModel(repository: repository)
+        repository.readResult = .success(nil)
+
+        viewModel.refresh()
+
+        guard case .empty = viewModel.recordState else {
+            Issue.record("Expected an empty state after a successful retry")
+            return
+        }
+        #expect(viewModel.canAddRecord)
+        #expect(repository.readAttempts == 2)
+        #expect(repository.addAttempts == 0)
+    }
+
+    @MainActor
+    private final class ReadRepositoryStub: VisionRecordRepository {
+        enum ReadError: Error {
+            case unavailable
+        }
+
+        var readResult: Result<VisionRecord?, ReadError> = .failure(.unavailable)
+        private(set) var readAttempts = 0
+        private(set) var addAttempts = 0
+
+        func latestRecord() throws -> VisionRecord? {
+            readAttempts += 1
+            return try readResult.get()
+        }
+
+        func add(_ record: VisionRecord) throws {
+            addAttempts += 1
+        }
     }
 }

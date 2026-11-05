@@ -25,7 +25,8 @@ struct DashboardView: View {
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        if let record = viewModel.latestRecord {
+                        switch viewModel.recordState {
+                        case .loaded(let record):
                             LabeledContent("Left Eye") {
                                 Text(record.leftEyeAcuity, format: .number.locale(locale))
                             }
@@ -35,8 +36,16 @@ struct DashboardView: View {
                             LabeledContent("Examination Date and Time") {
                                 Text(record.measuredAt, format: .dateTime.year().month().day().hour().minute().locale(locale))
                             }
-                        } else {
+                        case .empty:
                             Text("No examination records yet")
+                        case .failed:
+                            Text("Unable to Load Records")
+                                .font(.headline)
+                                .accessibilityAddTraits(.isHeader)
+                            Text("Please try again.")
+                            Button("Retry", action: viewModel.refresh)
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("dashboard.retryLoadRecordsButton")
                         }
                     }
                         .foregroundStyle(.secondary)

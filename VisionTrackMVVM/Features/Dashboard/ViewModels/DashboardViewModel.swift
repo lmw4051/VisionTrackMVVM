@@ -7,10 +7,20 @@ final class DashboardViewModel {
         case unavailable
     }
 
-    private(set) var latestRecord: VisionRecord?
+    enum RecordState {
+        case empty
+        case loaded(VisionRecord)
+        case failed
+    }
+
+    private(set) var recordState: RecordState = .empty
     private let repository: any VisionRecordRepository
     let syncStatus: SyncStatus = .unavailable
-    let canAddRecord = true
+
+    var canAddRecord: Bool {
+        if case .failed = recordState { return false }
+        return true
+    }
 
     init(repository: any VisionRecordRepository) {
         self.repository = repository
@@ -18,6 +28,14 @@ final class DashboardViewModel {
     }
 
     func refresh() {
-        latestRecord = repository.latestRecord()
+        do {
+            if let record = try repository.latestRecord() {
+                recordState = .loaded(record)
+            } else {
+                recordState = .empty
+            }
+        } catch {
+            recordState = .failed
+        }
     }
 }

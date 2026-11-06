@@ -12,6 +12,7 @@ struct SwiftDataVisionRecordRepositoryTests {
     @Test func emptyStoreReturnsNil() throws {
         let repository = SwiftDataVisionRecordRepository(container: try VisionRecordStore.inMemory())
         #expect(try repository.latestRecord() == nil)
+        #expect(try repository.fetchRecords().isEmpty)
     }
 
     @Test func recordRoundTripsThroughSwiftData() throws {
@@ -19,6 +20,7 @@ struct SwiftDataVisionRecordRepositoryTests {
         let record = makeRecord(id: firstID)
         try repository.add(record)
         try expectLatest(record, in: repository)
+        try expectHistory([record], in: repository)
     }
 
     @Test func measurementTimeTakesPrecedenceOverInsertionOrder() throws {
@@ -50,6 +52,7 @@ struct SwiftDataVisionRecordRepositoryTests {
         #expect(records.count == 2)
         #expect(records.first { $0.id == firstID }?.insertionOrder == 1)
         try expectLatest(second, in: repository)
+        try expectHistory([second, first], in: repository)
     }
 
     @Test func conflictingContentDoesNotOverwriteTheOriginal() throws {
@@ -71,6 +74,7 @@ struct SwiftDataVisionRecordRepositoryTests {
 
         #expect(try ModelContext(container).fetchCount(FetchDescriptor<VisionRecordEntity>()) == 1)
         try expectLatest(original, in: repository)
+        try expectHistory([original], in: repository)
     }
 
     @Test(arguments: [Double.nan, Double.infinity, -Double.infinity])
@@ -112,8 +116,10 @@ struct SwiftDataVisionRecordRepositoryTests {
             let reopened = try VisionRecordStore.onDisk(at: url)
             let repository = SwiftDataVisionRecordRepository(container: reopened)
             try expectLatest(second, in: repository)
+            try expectHistory([second, first, older], in: repository)
             try repository.add(next)
             try expectLatest(next, in: repository)
+            try expectHistory([next, second, first, older], in: repository)
 
             let records = try ModelContext(reopened).fetch(FetchDescriptor<VisionRecordEntity>())
             #expect(records.count == 4)
@@ -145,6 +151,30 @@ struct SwiftDataVisionRecordRepositoryTests {
             let reopened = try VisionRecordStore.onDisk(at: url)
             #expect(try ModelContext(reopened).fetchCount(FetchDescriptor<VisionRecordEntity>()) == 1)
             try expectLatest(existing, in: SwiftDataVisionRecordRepository(container: reopened))
+        }
+    }
+
+    @Test func fetchRecordsOrdersByMeasurementTimeThenInsertionOrder() throws {
+        let repository = SwiftDataVisionRecordRepository(container: try VisionRecordStore.inMemory())
+        let earlierInsertion = makeRecord(id: thirdID, seconds: 2_000)
+        let olderMeasurement = makeRecord(id: secondID, seconds: 1_000)
+        let laterInsertion = makeRecord(id: firstID, seconds: 2_000)
+
+        try repository.add(earlierInsertion)
+        try repository.add(olderMeasurement)
+        try repository.add(laterInsertion)
+
+        try expectHistory([laterInsertion, earlierInsertion, olderMeasurement], in: repository)
+    }
+
+    private func expectHistory(_ expected: [VisionRecord], in repository: SwiftDataVisionRecordRepository) throws {
+        let history = try repository.fetchRecords()
+        #expect(history.map(\.id) == expected.map(\.id))
+        #expect(try repository.latestRecord()?.id == history.first?.id)
+        for (actual, record) in zip(history, expected) {
+            #expect(actual.measuredAt == record.measuredAt)
+            #expect(actual.leftEyeAcuity == record.leftEyeAcuity)
+            #expect(actual.rightEyeAcuity == record.rightEyeAcuity)
         }
     }
 

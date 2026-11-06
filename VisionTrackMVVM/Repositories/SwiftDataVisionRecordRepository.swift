@@ -17,12 +17,20 @@ final class SwiftDataVisionRecordRepository: VisionRecordRepository {
     }
 
     func latestRecord() throws -> VisionRecord? {
-        var descriptor = FetchDescriptor<VisionRecordEntity>(sortBy: [
+        var descriptor = orderedRecordsDescriptor
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first?.toDomain()
+    }
+
+    func fetchRecords() throws -> [VisionRecord] {
+        try context.fetch(orderedRecordsDescriptor).map { $0.toDomain() }
+    }
+
+    private var orderedRecordsDescriptor: FetchDescriptor<VisionRecordEntity> {
+        FetchDescriptor(sortBy: [
             SortDescriptor(\.measuredAt, order: .reverse),
             SortDescriptor(\.insertionOrder, order: .reverse)
         ])
-        descriptor.fetchLimit = 1
-        return try context.fetch(descriptor).first?.toDomain()
     }
 
     func add(_ record: VisionRecord) throws {

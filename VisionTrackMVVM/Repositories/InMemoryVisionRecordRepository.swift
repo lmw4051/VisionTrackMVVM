@@ -19,6 +19,14 @@ final class InMemoryVisionRecordRepository: VisionRecordRepository {
         return latest
     }
 
+    func fetchRecords() -> [VisionRecord] {
+        records.indices.sorted { lhs, rhs in
+            let leftDate = records[lhs].measuredAt
+            let rightDate = records[rhs].measuredAt
+            return leftDate == rightDate ? lhs > rhs : leftDate > rightDate
+        }.map { records[$0] }
+    }
+
     func add(_ record: VisionRecord) throws {
         records.append(record)
     }

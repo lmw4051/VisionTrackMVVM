@@ -196,6 +196,10 @@ struct VisionTrackMVVMTests {
             return try readResult.get()
         }
 
+        func fetchRecords() throws -> [VisionRecord] {
+            try readResult.get().map { [$0] } ?? []
+        }
+
         func add(_ record: VisionRecord) throws {
             addAttempts += 1
         }

@@ -13,6 +13,7 @@ struct InMemoryVisionRecordRepositoryTests {
         let repository = InMemoryVisionRecordRepository()
 
         #expect(repository.latestRecord() == nil)
+        #expect(repository.fetchRecords().isEmpty)
     }
 
     @Test("Adding one record returns that record")
@@ -27,6 +28,14 @@ struct InMemoryVisionRecordRepositoryTests {
         #expect(latest.measuredAt == record.measuredAt)
         #expect(latest.leftEyeAcuity == record.leftEyeAcuity)
         #expect(latest.rightEyeAcuity == record.rightEyeAcuity)
+
+        let history = repository.fetchRecords()
+        #expect(history.count == 1)
+        let fetched = try #require(history.first)
+        #expect(fetched.id == record.id)
+        #expect(fetched.measuredAt == record.measuredAt)
+        #expect(fetched.leftEyeAcuity == record.leftEyeAcuity)
+        #expect(fetched.rightEyeAcuity == record.rightEyeAcuity)
     }
 
     @Test("Latest record is determined by measuredAt")
@@ -56,6 +65,19 @@ struct InMemoryVisionRecordRepositoryTests {
         // A later insertion with an older measurement must not replace it.
         try repository.add(makeRecord(id: thirdID, timestamp: 1_000))
         #expect(repository.latestRecord()?.id == second.id)
+    }
+
+    @Test func fetchRecordsSortsWithoutChangingInsertionOrder() throws {
+        let repository = InMemoryVisionRecordRepository()
+        try repository.add(makeRecord(id: thirdID, timestamp: 2_000))
+        try repository.add(makeRecord(id: secondID, timestamp: 1_000))
+        try repository.add(makeRecord(id: firstID, timestamp: 2_000))
+
+        let expected = [firstID, thirdID, secondID]
+        let history = repository.fetchRecords()
+        #expect(history.map(\.id) == expected)
+        #expect(history.first?.id == repository.latestRecord()?.id)
+        #expect(repository.fetchRecords().map(\.id) == expected)
     }
 
     private func makeRecord(id: UUID, timestamp: TimeInterval) -> VisionRecord {

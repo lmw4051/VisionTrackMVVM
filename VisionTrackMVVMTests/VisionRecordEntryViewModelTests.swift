@@ -338,6 +338,10 @@ struct VisionRecordEntryViewModelTests {
             records.last
         }
 
+        func fetchRecords() -> [VisionRecord] {
+            Array(records.reversed())
+        }
+
         func add(_ record: VisionRecord) throws {
             attemptedRecords.append(record)
             if shouldFail { throw StubError.writeFailed }

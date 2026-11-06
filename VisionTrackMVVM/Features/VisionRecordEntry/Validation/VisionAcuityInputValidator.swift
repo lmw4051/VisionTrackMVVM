@@ -40,7 +40,7 @@ enum VisionAcuityInputValidator {
         return .success(NSDecimalNumber(decimal: value).doubleValue)
     }
 
-    private static func isASCIIDigits(_ part: Substring) -> Bool {
+    nonisolated private static func isASCIIDigits(_ part: Substring) -> Bool {
         !part.isEmpty && part.utf8.allSatisfy { (48...57).contains($0) }
     }
 }

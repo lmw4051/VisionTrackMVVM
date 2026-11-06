@@ -80,6 +80,13 @@ struct DashboardView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!viewModel.canAddRecord)
                 .accessibilityIdentifier("dashboard.addVisionRecordButton")
+
+                NavigationLink {
+                    VisionRecordHistoryView(repository: repository)
+                } label: {
+                    Label("Vision Record History", systemImage: "clock")
+                }
+                .accessibilityIdentifier("dashboard.historyButton")
             }
             .padding()
         }

@@ -464,6 +464,38 @@
           }
         }
       }
+    },
+    "Vision Record History": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision Record History"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "視力檢測歷史"
+          }
+        }
+      }
+    },
+    "Vision Record Details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision Record Details"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "視力檢測紀錄詳情"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
